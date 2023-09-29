@@ -19,7 +19,8 @@
 import re
 import mysql.connector
 import requests
-from bs4 import BeautifulSoup
+from bs4      import BeautifulSoup
+from datetime import datetime
 
 
 # to do
@@ -66,8 +67,7 @@ class mySQL_PTT_title_info:
             `Reply`     VARCHAR(4) ,
             `class`     VARCHAR(255) ,
             `title`     VARCHAR(255) ,
-            `month`     INT(4) ,
-            `day`       INT(4) ,
+            `date`      DATE ,
             `like`      INT(255) ,
             `url`       VARCHAR(255) ,
             `stock_code`VARCHAR(6)
@@ -129,6 +129,7 @@ class PTT_Scrapy:
         bs4_name  = soup.find_all('div', class_='r-ent')
         unit_array = []
         unit_id = 0
+        unit_year = "2023" # 5817->2022
         for unit_div in bs4_name :
             
             # The div for a article, all info about this article is put in this div. 
@@ -146,15 +147,20 @@ class PTT_Scrapy:
                 print('不抓'+ str(self.start_date) +'(含)之前的文')
                 # To Do
                 break
-            unit_month = find('(\d*?)\/\d{2}', unit_date)[0]
-            unit_day   = find('\d*?\/(\d{2})', unit_date)[0]
+            unit_month = find('(\d{1,2})\/\d{2}', unit_date)[0]
+            unit_day   = find('\d{1,2}\/(\d{2})', unit_date)[0]
+            if   len(unit_month) == 1:
+                unit_date_format = unit_year +'-0' + unit_month +'-' + unit_day
+            elif len(unit_month) == 2:
+                unit_date_format = unit_year +'-'  + unit_month +'-' + unit_day
+            #datetime.strptime(unit_date_format,"%Y-%M-%D")
             
             # Title of article
             unit_title = find('(?<=]).+',unit)[0].replace('"',' ').replace('\'',' ')
             
             # The count of like of article
             unit_like  = find('class=.*">(.*?)<', str(unit_div))[0]
-            if   unit_like == '爆': unit_like = "200"
+            if   unit_like == '爆': unit_like = "100"
             elif str(unit_like)   : unit_like = str(unit_like)
             else:                   unit_like = "0" 
             
@@ -168,7 +174,7 @@ class PTT_Scrapy:
             unit_reply  = find('[A-Z][a-z]:\s',unit)[0]
             
             # Make a array to output
-            unit_list   = [str(unit_id), unit_reply, unit_class, unit_title, unit_month, unit_day, unit_like, unit_url, unit_code ]
+            unit_list   = [str(unit_id), unit_reply, unit_class, unit_title, unit_date_format, unit_like, unit_url, unit_code ]
             unit_array.append(unit_list)
             
         return unit_array
