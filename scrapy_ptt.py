@@ -20,7 +20,7 @@ import re
 import mysql.connector
 import requests
 from bs4      import BeautifulSoup
-from datetime import datetime
+from datetime import timedelta, datetime
 
 
 # to do
@@ -42,7 +42,7 @@ def find(inp_to_find, string):
     if re_find:
         return re_find
     else:
-        return ['NULL'] 
+        return ["NULL"]
 
 
 #def trans_date_into_time_format(date_string): # 
@@ -105,10 +105,37 @@ class mySQL_PTT_title_info:
 ### Scrapy from PTT ###
 
 class PTT_Scrapy:
-    def __init__(self, url, start_date = ' 3/01'):
+    def __init__(self, url, start_date = '2023-01-01'):
         self.url        = url
         self.start_date = start_date
-
+    
+    # Transfer date on PTT (9/26) to standrad format (2023-09-26).
+    def find_date(self, div_input, unit_year):
+        unit_date  = find('<div class="date">(.*?)</div>', str(div_input))[0]
+        unit_month = find('(\d{1,2})\/\d{2}', unit_date)[0]
+        unit_day   = find('\d{1,2}\/(\d{2})', unit_date)[0]
+        if   len(unit_month) == 1:
+            unit_date_format = unit_year +'-0' + unit_month +'-' + unit_day
+        elif len(unit_month) == 2:
+            unit_date_format = unit_year +'-'  + unit_month +'-' + unit_day
+        else :
+            return False
+        timedate_1_day = timedelta(days=1)
+        without_start_date = datetime.strptime( self.start_date,"%Y-%m-%d") - timedate_1_day
+        print(without_start_date )
+        if unit_date_format == without_start_date:
+            print('不抓'+ str(self.start_date) +'之前的文')
+            return False
+        return unit_date_format
+   
+    #transfer any type of like to int.
+    def find_like(self, div_input):
+        unit_like  = find('class="nrec">.*">(.*?)<', str(div_input))[0]
+        if   unit_like == '爆': unit_like = "100"
+        elif str(unit_like)   : unit_like = str(unit_like)
+        else:                   unit_like = "0" 
+        return unit_like
+        
     # Enter a PTT page from url
     def get_requests_from_PTT(self):
         HEADERS = {'user-agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) \
@@ -134,7 +161,7 @@ class PTT_Scrapy:
             
             # The div for a article, all info about this article is put in this div. 
             unit       = find('<a href=(.+?)</a>\n</div>',     str(unit_div))[0]
-            if unit         == "None" : continue
+            if   unit       == "None" : continue
             
             # Classification about PTT stock layout rule [OO]
             unit_class  = find('\[(.*)\]',unit)[0]
@@ -142,44 +169,35 @@ class PTT_Scrapy:
             elif unit_class == "公告" : continue
             
             # The day article post
-            unit_date  = find('<div class="date">(.*?)</div>', str(unit_div))[0]
-            if unit_date == self.start_date:
-                print('不抓'+ str(self.start_date) +'(含)之前的文')
-                # To Do
-                break
-            unit_month = find('(\d{1,2})\/\d{2}', unit_date)[0]
-            unit_day   = find('\d{1,2}\/(\d{2})', unit_date)[0]
-            if   len(unit_month) == 1:
-                unit_date_format = unit_year +'-0' + unit_month +'-' + unit_day
-            elif len(unit_month) == 2:
-                unit_date_format = unit_year +'-'  + unit_month +'-' + unit_day
-            #datetime.strptime(unit_date_format,"%Y-%M-%D")
+            unit_date  = self.find_date(unit_div, "2023")
+            if   unit_date  == False  : continue
             
             # Title of article
-            unit_title = find('(?<=]).+',unit)[0].replace('"',' ').replace('\'',' ')
-            
-            # The count of like of article
-            unit_like  = find('class=.*">(.*?)<', str(unit_div))[0]
-            if   unit_like == '爆': unit_like = "100"
-            elif str(unit_like)   : unit_like = str(unit_like)
-            else:                   unit_like = "0" 
-            
+            unit_title  = find('(?<=]).+',unit)[0].replace('"',' ').replace('\'',' ')
+        
             # The code of stock, need to avoid year and day
             unit_code   = find('\d{4,6}',unit_title)[0]
-            if unit_class == "閒聊" : continue
+            if   unit_class == "閒聊" : continue
             
-            # The other index about article 
+            # The count of like of article
+            unit_like   = self.find_like(unit_div)
+            
+            # The other index about article about connection URL
             unit_url    = 'https://www.ptt.cc' + find('"(/bbs/Stock/M.*?)"',unit)[0]
-            unit_id     = unit_id + 1
+            
+            # Is article replyed from other article 
             unit_reply  = find('[A-Z][a-z]:\s',unit)[0]
             
+            # The id will be recorded in mySQL 
+            unit_id     = unit_id + 1
+            
             # Make a array to output
-            unit_list   = [str(unit_id), unit_reply, unit_class, unit_title, unit_date_format, unit_like, unit_url, unit_code ]
+            unit_list   = [str(unit_id), unit_reply, unit_class, unit_title, unit_date, unit_like, unit_url, unit_code ]
             unit_array.append(unit_list)
             
         return unit_array
                        
-first_scrapy         = PTT_Scrapy('https://www.ptt.cc/bbs/Stock/index.html', ' 3/01')
+first_scrapy         = PTT_Scrapy('https://www.ptt.cc/bbs/Stock/index6587.html', '2023-01-01')
 first_webpage        = first_scrapy.get_requests_from_PTT()         
 article_array        = first_scrapy.scrapy_title()
 PTT_title_info_table = mySQL_PTT_title_info
