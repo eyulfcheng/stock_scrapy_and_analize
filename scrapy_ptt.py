@@ -3,17 +3,12 @@
 # Goal: Scrapy article title from PTT
 #       PTT title -> MySQL
 
-# Format:
-    #`id`        VARCHAR(50) PRIMARY KEY,
-    #`Re`        VARCHAR(4) ,
-    #`class`     VARCHAR(255) ,
-    #`title`     VARCHAR(255) ,
-    #`month`     VARCHAR(4) ,
-    #`day`       VARCHAR(4) ,
-    #`like`      int(255) ,
-    #`html`      VARCHAR(255) ,
-    #`stock_code`VARCHAR(4)
-# TO DO
+# Step:
+    # 1. Create Table in MySQL.
+    # 2. Start loop :
+        # a. Get REQUEST from URL.
+        # b. Analize HTML by BEAUTIFULSOUP and REGULAR.
+        # c. Insert info to MySQL.
 
 ##### Import #####
 import re
@@ -121,21 +116,22 @@ class PTT_scrapy():
     
     ## To find year by this page's URL.     
     def find_year(self, div_input ,month):
-        List_new_year_page_ID = [5817,4526,2413,955,215] 
-        # When url_id == 5818 self.unit_year = "2023" .When url_id == 5816 self.unit_year = "2022"
+        List_new_year_page_ID = [[2022,5817],[2021,4526],[2020,2413],[2019,955],[2018,215]] # [year, threshold_page_ID] 
+        # When url_id == 5818 self.unit_year = "2023" .
+        # When url_id == 5816 self.unit_year = "2022"
         # new_year_page_ID of 2023 : 5817 ...
         # These article account are too less:
         # [118,[2015,2016]],[80,[2014,2015],[52,[2012,2013]],[26,[2008,2009]],[3,[2007,2008]]
         today = date.today()
         unit_url_id = find('https://www.ptt.cc/bbs/Stock/index(.+?).html', self.url)[0]
         if       unit_url_id    == " " : unit_year = str(today.year)
-        elif int(unit_url_id)   <  List_new_year_page_ID[-1]: return "2000"
+        elif int(unit_url_id)   <  List_new_year_page_ID[-1][1]: return "2000"
         else :
-            for index,threshold in enumerate(List_new_year_page_ID):
-                if   int(unit_url_id) >  threshold : unit_year = str(int(today.year) - index - 1) ; break
+            for [year,threshold] in List_new_year_page_ID:
+                if   int(unit_url_id) >  threshold : unit_year = str( year ) ; break
                 elif int(unit_url_id) == threshold :
-                    if   int(month)   == 1      : unit_year = str(int(today.year) - index - 1)
-                    elif int(month)   == 12     : unit_year = str(int(today.year) - index - 2)
+                    if   int(month)   == 1      : unit_year = str( year)
+                    elif int(month)   == 12     : unit_year = str( year - 1)
                 else: continue
         return unit_year
     
@@ -181,7 +177,7 @@ class PTT_scrapy():
         unit_code = find('(\d{4,6}[A-Z]{0,1})',title_input)[0]
         if self.flag_debug == True:
             print("find_code: " + unit_code)
-        if unit_code == self.unit_year:
+        if find('(\d{4})',self.unit_year)[0] == self.unit_year:
             return " "
         #if   unit_code == 
         return unit_code
@@ -288,6 +284,9 @@ class PTT_scrapy():
         print("Happy Endding")
         return True
     
+    # Sometimes scrapy function would be blocked by some defense mechanism. 
+    # This function can continue the last scrapy.
+    # It need to update URL (page_ID) and the lastest int(unit_ID) searched in mySQL.
     def increase_PTT_stock_page(self):
         
         ## Create DB on mySQL
@@ -319,4 +318,7 @@ class PTT_scrapy():
 
 main_function = PTT_scrapy('https://www.ptt.cc/bbs/Stock/index.html','2018-01-01')
 main_function.scrapy_total_PTT_stock_page()
+
+
+#main_function = PTT_scrapy('https://www.ptt.cc/bbs/Stock/index1234.html','2018-01-01',30123)
 #main_function.increase_PTT_stock_page()
