@@ -1,3 +1,4 @@
+'''
 ##### Description #####
 
 # Goal: Scrapy article title from PTT
@@ -9,6 +10,7 @@
         # a. Get REQUEST from URL.
         # b. Analize HTML by BEAUTIFULSOUP and REGULAR.
         # c. Insert info to MySQL.
+'''
 
 ##### Import #####
 import re
@@ -18,8 +20,6 @@ import mysql.connector
 import requests
 from bs4      import BeautifulSoup
 from datetime import timedelta, datetime, date
-
-# to do
 
 ##### Define class and function #####
 
@@ -112,27 +112,45 @@ class PTT_scrapy():
         self.start_date = start_date
         self.flag_keep_scrapy = True
         self.unit_id = unit_id
-        self.flag_debug = True
+        self.flag_debug = False
     
     ## To find year by this page's URL.     
     def find_year(self, div_input ,month):
-        List_new_year_page_ID = [[2022,5817],[2021,4526],[2020,2413],[2019,955],[2018,215]] # [year, threshold_page_ID] 
+        List_new_year_page_ID = [[2022,5817],[2021,4526],[2020,2413],[2019,955],[2018,215]] 
+        '''
+        # [year, threshold_page_ID] 
         # When url_id == 5818 self.unit_year = "2023" .
         # When url_id == 5816 self.unit_year = "2022"
         # new_year_page_ID of 2023 : 5817 ...
         # These article account are too less:
         # [118,[2015,2016]],[80,[2014,2015],[52,[2012,2013]],[26,[2008,2009]],[3,[2007,2008]]
+        '''
         today = date.today()
-        unit_url_id = find('https://www.ptt.cc/bbs/Stock/index(.+?).html', self.url)[0]
-        if       unit_url_id    == " " : unit_year = str(today.year)
-        elif int(unit_url_id)   <  List_new_year_page_ID[-1][1]: return "2000"
+        unit_url_id = find('https://www.ptt.cc/bbs/Stock/index(\d{1,4}).html', self.url)[0]
+        unit_year = "0"
+        if       unit_url_id    == " " :
+            unit_year = str(today.year)
+        elif int(unit_url_id)   <  List_new_year_page_ID[-1][1]:
+            return "2000"
         else :
             for [year,threshold] in List_new_year_page_ID:
-                if   int(unit_url_id) >  threshold : unit_year = str( year ) ; break
+                if   int(unit_url_id) >  threshold : 
+                    unit_year = str( year + 1) 
+                    break
                 elif int(unit_url_id) == threshold :
-                    if   int(month)   == 1      : unit_year = str( year)
-                    elif int(month)   == 12     : unit_year = str( year - 1)
-                else: continue
+                    if   int(month)   == 1      : 
+                        unit_year = str( year + 1)
+                        break
+                    elif int(month)   == 12     : 
+                        unit_year = str( year )
+                        break
+                elif int(unit_url_id) < threshold :
+                    continue
+                else: 
+                    print_red("ERROR")
+                    print("unit_url_id:"+ unit_url_id)
+                    print("threshold:"  + str(threshold))
+            print("unit_year:"  + unit_year)
         return unit_year
     
     ## Transfer date on PTT (9/26) to standrad format (2023-09-26).
@@ -153,7 +171,6 @@ class PTT_scrapy():
         timedate_1_day = timedelta(days=1)
         without_start_date = datetime.strftime(datetime.strptime( self.start_date,"%Y-%m-%d") - timedate_1_day, "%Y-%m-%d")
         
-        #print(unit_date_format +',' +str(without_start_date) )
         if unit_date_format == str(without_start_date):
             print('不抓'+ str(self.start_date) +'之前的文')
             self.flag_keep_scrapy = False
@@ -179,7 +196,7 @@ class PTT_scrapy():
             print("find_code: " + unit_code)
         if find('(\d{4})',self.unit_year)[0] == self.unit_year:
             return " "
-        #if   unit_code == 
+
         return unit_code
         
     # Enter a PTT page from url
@@ -190,7 +207,6 @@ class PTT_scrapy():
         self.webpage = requests.get( url, headers = HEADERS, cookies={'over18':'1'})
         
         if (str(self.webpage)!="<Response [200]>"):
-            print(self.webpage) 
             # response table https://ithelp.ithome.com.tw/m/articles/10269928
             return self.webpage
         else:
@@ -248,8 +264,8 @@ class PTT_scrapy():
             
             # Make a array to output
             unit_list   = [str(self.unit_id), unit_reply, unit_class, unit_title, unit_date, unit_like, unit_url, unit_code, unit_author ]
-            if self.flag_debug == True:
-                print(unit_list)
+            if self.flag_debug == True:pass
+            print(unit_list)
             unit_array.append(unit_list)
             
         return unit_array
@@ -258,26 +274,24 @@ class PTT_scrapy():
     def scrapy_total_PTT_stock_page(self):
         
         ## Create DB on mySQL
-        PTT_title_info_table = mySQL_PTT_title_info
         mySQL_PTT_title_info.create()
-        page_url = self.url
         
         ## Scrapy every pages
         while self.flag_keep_scrapy == True :
-            every_webpage = self.get_requests_from_PTT(page_url)
+            self.get_requests_from_PTT(self.url)
             article_array = self.scrapy_title()
         
             ## Save data in mySQL
             mySQL_PTT_title_info.insert(article_array)
-            if self.flag_debug == True:
-                print("soup: " + str(self.soup))
+            #if self.flag_debug == True:
+                #print("soup: " + str(self.soup))
             if (len(self.soup.find_all('a', class_='btn wide')) != 0):
                 div_last_page = str(self.soup.find_all('a', class_='btn wide')[1]) # [0]:The oldest page
             else:
                 continue
             url_last_page ='https://www.ptt.cc' + find('<a class="btn wide" href="(.*?)">‹ 上頁', div_last_page)[0]
             print_blue(url_last_page)
-            page_url      = url_last_page
+            self.url      = url_last_page
             sleep_random_second()
         # End of while
         
@@ -288,37 +302,32 @@ class PTT_scrapy():
     # This function can continue the last scrapy.
     # It need to update URL (page_ID) and the lastest int(unit_ID) searched in mySQL.
     def increase_PTT_stock_page(self):
-        
-        ## Create DB on mySQL
-        PTT_title_info_table = mySQL_PTT_title_info
-        #mySQL_PTT_title_info.create()
-        page_url = self.url
-        
+
         ## Scrapy every pages
         while self.flag_keep_scrapy == True :
-            every_webpage = self.get_requests_from_PTT(page_url)
+            self.get_requests_from_PTT(self.url)
             article_array = self.scrapy_title()
         
             ## Save data in mySQL
             mySQL_PTT_title_info.insert(article_array)
-            if self.flag_debug == True:
-                print("soup: " + str(self.soup))
+            if self.flag_debug == True:pass
+                #print("soup: " + str(self.soup))
             if (len(self.soup.find_all('a', class_='btn wide')) != 0):
                 div_last_page = str(self.soup.find_all('a', class_='btn wide')[1]) # [0]:The oldest page
             else:
                 continue
             url_last_page ='https://www.ptt.cc' + find('<a class="btn wide" href="(.*?)">‹ 上頁', div_last_page)[0]
             print_blue(url_last_page)
-            page_url      = url_last_page
+            self.url      = url_last_page
             sleep_random_second()
         # End of while
         
         print("Happy Endding")
         return True
 
-main_function = PTT_scrapy('https://www.ptt.cc/bbs/Stock/index.html','2018-01-01')
-main_function.scrapy_total_PTT_stock_page()
+#main_function = PTT_scrapy('https://www.ptt.cc/bbs/Stock/index.html','2022-01-01')
+#main_function.scrapy_total_PTT_stock_page()
 
 
-#main_function = PTT_scrapy('https://www.ptt.cc/bbs/Stock/index1234.html','2018-01-01',30123)
-#main_function.increase_PTT_stock_page()
+main_function = PTT_scrapy('https://www.ptt.cc/bbs/Stock/index4526.html','2018-01-01',41195)
+main_function.increase_PTT_stock_page()
